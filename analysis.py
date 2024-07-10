@@ -78,30 +78,55 @@ class SentimentAnalyzer:
             report += f"   Sentiment: {score:.2f}\n"
             report += f"   Exam Season: {'Yes' if is_exam else 'No'}\n"
             report += f"   Stress Reason: {reason if reason else 'Not specified'}\n\n"
-        
+
+        def generate_suggestions(self):
+            suggestions = {
+                "Academic Stress": [
+                    "Create a study schedule to manage your time effectively.",
+                    "Take regular breaks to avoid burnout.",
+                    "Seek help from teachers or classmates if you're struggling with a subject.",
+                    "Practice relaxation techniques such as deep breathing or meditation."
+                ],
+                "Work-Related Stress": [
+                    "Prioritize your tasks and focus on one thing at a time.",
+                    "Communicate with your manager about your workload and seek support if needed.",
+                    "Take short breaks throughout the day to rest and recharge.",
+                    "Engage in physical activity or hobbies outside of work to relieve stress."
+                ],
+                "Relationship Stress": [
+                    "Communicate openly and honestly with the people involved.",
+                    "Spend time with supportive friends and family members.",
+                    "Set healthy boundaries to protect your well-being.",
+                    "Consider seeking advice or counseling to work through relationship issues."
+                ],
+                "Health Stress": [
+                    "Follow a healthy diet and get regular exercise.",
+                    "Practice mindfulness and relaxation techniques.",
+                    "Seek medical advice and follow treatment plans as prescribed.",
+                    "Connect with support groups or mental health professionals."
+                ],
+                "General stress": [
+                    "Practice mindfulness or meditation.",
+                    "Engage in regular physical activity.",
+                    "Maintain a healthy work-life balance.",
+                    "Seek support from friends, family, or a therapist."
+                ]
+            }
+
+            report = "Suggested Ways to Overcome Stress:\n"
+            for reason in set(self.stress_reasons):
+                if reason:
+                    report += f"\n{reason}:\n"
+                    for suggestion in suggestions.get(reason, ["Consider talking to a therapist for personalized advice."]):
+                        report += f"  - {suggestion}\n"
         return report
 
 def round_robin_selection(agents, messages):
     index = len(messages) % len(agents)
     return agents[index]
 
-def get_log(dbname="logs.db", table="chat_completions"):
-    import sqlite3
-
-    con = sqlite3.connect(dbname)
-    query = f"SELECT * from {table}"
-    cursor = con.execute(query)
-    rows = cursor.fetchall()
-    column_names = [description[0] for description in cursor.description]
-    data = [dict(zip(column_names, row)) for row in rows]
-    con.close()
-    return data
 
 config_list = config_list_from_json("OAI_CONFIG_LIST")
-
-#Start logging
-logging_session_id = autogen.runtime_logging.start(config={"dbname": "logs.db"})
-print("Logging session ID: " + str(logging_session_id))
 
 user = UserProxyAgent(
     name="user",
@@ -138,6 +163,14 @@ def is_exam_season():
 # Function to extract stress reason (you would need to implement this based on message content)
 def extract_stress_reason(message):
     # This is a placeholder. You'd need to implement logic to extract the stress reason from the message.
+    if "Exams"or "grades" or "project" or "deadlines" or "Balancing" or "studies" or "responsibilities" or "examination" in message:
+        return "Academic Stress"
+    elif "high workload" or "job"or "insecurity"or "Lack" or "satisfaction" or "working hours" or "conflict" or "colleagues" in message:
+        return "Work-Related Stress"
+    elif "family members" or "family" or "loneliness" or "isolation" or "friends" or "partners" or "social" in message:
+        return "Relationship Stress"
+    elif "illness" or "injury" or "anxiety" or "depression" or "personal health" in message:
+        return "Health Stress"
     return "General stress"
 
 # Analyze the initial message
@@ -151,36 +184,41 @@ def extract_stress_reason(message):
 user.initiate_chat(therapist, message=initial_message)
 content_main = ""
 
-print("user chat: ", user.chat_messages)
-print('---------')
-print(groupchat.messages)
+#print("user chat: ", user.chat_messages)
+#print('------')
+data = user.chat_messages
+# print(data["assistant_agent"])
+#print('---------')
 # After the conversation, analyze sentiment for each user message
-assistant_content = [entry['content'] for entry in user.chat_messages['assistant_agent'] if entry['role'] == 'assistant']
+assistant_content = []
+
+# Iterating through the defaultdict to access the messages
+for key, messages in data.items():
+    for message in messages:
+        if message['role'] == 'assistant':
+            assistant_content.append(message['content'])
+
 
 # Print the extracted content
 for content in assistant_content:
-    content_main += content
+    sentiment_analyzer.analyze_sentiment(
+            content,
+            is_exam_season=is_exam_season(),
+            stress_reason=extract_stress_reason(content)
+        )
 
-
-# print("content:", content)
-
-sentiment_analyzer.analyze_sentiment(
-          content_main,
-          is_exam_season=is_exam_season(),
-          stress_reason=extract_stress_reason(content_main)
-    )
 
 
 # Generate the report
-try:
-    report = sentiment_analyzer.generate_report()
-    print("\nGenerating report...")
-    print(report)
+    try:
+        report = sentiment_analyzer.generate_report()
+        print("\nGenerating report...")
+        print(report)
 
-    with open('therapy_report.txt', 'w') as f:
-        f.write(report)
+        with open('therapy_report.txt', 'w') as f:
+            f.write(report)
 
-    print("Report saved as 'therapy_report.txt'")
-    print("Sentiment graph saved as 'sentiment_report.png'")
-except Exception as e:
-    print(f"An error occurred: {e}")
+        print("Report saved as 'therapy_report.txt'")
+        print("Sentiment graph saved as 'sentiment_report.png'")
+    except Exception as e:
+        print(f"An error occurred: {e}")
