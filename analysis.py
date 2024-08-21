@@ -207,8 +207,6 @@ for content in assistant_content:
             stress_reason=extract_stress_reason(content)
         )
 
-
-
 # Generate the report
     try:
         report = sentiment_analyzer.generate_report()
